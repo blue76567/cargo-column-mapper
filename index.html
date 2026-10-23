@@ -50,11 +50,12 @@
   <table id="map"></table>
   <p><small>“— ignore —” for columns you don’t need. Volumes are calculated automatically (L×W×H, ×Qty). Colors / Layer / hatch default sensibly and can be edited after export.</small></p>
   <div class="row">
-    <label>Default Top color: <input id="dTop" value="bylayer" size="10"></label>
-    <label>Default Rect/hatch color: <input id="dRect" value="bylayer" size="10"></label>
-    <label>Default Layer: <input id="dLayer" value="CARGO" size="10"></label>
-    <label>Default hatch y/n: <select id="dHatch"><option value="y">y</option><option value="n">n</option></select></label>
-    <label>Default COG: <input id="dCog" value="0" size="6"></label>
+    <label>Top color: <input id="dTop" value="bylayer" size="10"></label>
+    <label>Rectangle/ hatch color: <input id="dRect" value="bylayer" size="10"></label>
+    <label>Layer: <input id="dLayer" value="CARGO" size="10"></label>
+    <label>plot with hatch (y/n): <select id="dHatch"><option value="y">y</option><option value="n">n</option></select></label>
+    <label>COG long.: <input id="dCogL" value="0" size="6"></label>
+    <label>COG transv.: <input id="dCogT" value="0" size="6"></label>
   </div>
 </div>
 
@@ -194,7 +195,7 @@ function buildMapping(){
     tr.append(td0,td1,td2);
     tbl.appendChild(tr);
   }
-  ['dTop','dRect','dLayer','dHatch','dCog'].forEach(id=>$(id).onchange=buildPreview);
+  ['dTop','dRect','dLayer','dHatch','dCogL','dCogT'].forEach(id=>$(id).onchange=buildPreview);
   $('mapcard').hidden = false;
   buildPreview();
 }
@@ -235,8 +236,8 @@ function buildPreview(){
       Quantity: isNaN(qty)?'':qty, 'No.': g('no')||ri+1,
       'Port of Loading': g('pol'), 'Port of Disch.': g('pod'), 'Description': g('desc'),
       'Length m': isNaN(L)?'':L, 'Width m': isNaN(W)?'':W, 'Height m': isNaN(H)?'':H, 'Weight mt': isNaN(Wt)?'':Wt,
-      'COG long.': map.cogL>=0?(g('cogL')||0):$('dCog').value||0,
-      'COG transv.': map.cogT>=0?(g('cogT')||0):$('dCog').value||0,
+      'COG long.': map.cogL>=0?(g('cogL')||0):$('dCogL').value||0,
+      'COG transv.': map.cogT>=0?(g('cogT')||0):$('dCogT').value||0,
       'Remark': g('remark'),
       'Top color': map.topc>=0?(g('topc')||$('dTop').value):$('dTop').value,
       'Rectangle/ hatch color': map.rectc>=0?(g('rectc')||$('dRect').value):$('dRect').value,
