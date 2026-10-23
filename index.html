@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cargo Column Mapper — customer list → stowage table</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { max-width: 1100px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  p.sub { color: #555; margin-top: 0; }
+  .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 12px 0; }
+  #drop { border: 2px dashed #999; border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; }
+  #drop.over { border-color: #0a6; background: #f0fff5; }
+  table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f4f4f4; position: sticky; top: 0; }
+  .scroll { overflow: auto; max-height: 320px; }
+  select { max-width: 220px; }
+  .ok { color: #0a6; font-weight: 600; } .bad { color: #c00; font-weight: 600; } .warn { color: #b80; font-weight: 600; }
+  button { padding: 9px 16px; border-radius: 8px; border: 1px solid #888; background: #fff; cursor: pointer; font-size: .95rem; }
+  button.primary { background: #0a6; color: #fff; border-color: #0a6; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  small { color: #666; }
+  .priv { background: #eef7ff; border: 1px solid #bcd; border-radius: 8px; padding: 8px 12px; font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>Cargo Column Mapper</h1>
+<p class="sub">Customer list &rarr; your 18-column stowage table (for the AutoCAD script tool). 100% local — files never leave this page.</p>
+<div class="priv">Privacy: everything runs in your browser. Nothing is uploaded anywhere. Safe for confidential customer data.</div>
+
+<div class="card">
+  <h3>1. Drop customer file</h3>
+  <div id="drop">Drop <b>.xlsx / .xls / .csv</b> here or click to choose <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden></div>
+  <div id="fileinfo"><small>No file loaded.</small></div>
+</div>
+
+<div class="card" id="mapcard" hidden>
+  <h3>2. Check column mapping <small>(auto-detected — fix anything wrong)</small></h3>
+  <div class="row">
+    <label>Sheet: <select id="sheet"></select></label>
+    <label>Header row: <input type="number" id="headerrow" value="1" min="1" style="width:60px"></label>
+    <button id="remap">Re-detect</button>
+    <span id="matchscore"></span>
+  </div>
+  <p></p>
+  <table id="map"></table>
+  <p><small>“— ignore —” for columns you don’t need. Volumes are calculated automatically (L×W×H, ×Qty). Colors / Layer / hatch default sensibly and can be edited after export.</small></p>
+  <div class="row">
+    <label>Default Top color: <input id="dTop" value="bylayer" size="10"></label>
+    <label>Default Rect/hatch color: <input id="dRect" value="bylayer" size="10"></label>
+    <label>Default Layer: <input id="dLayer" value="CARGO" size="10"></label>
+    <label>Default hatch y/n: <select id="dHatch"><option value="y">y</option><option value="n">n</option></select></label>
+    <label>Default COG: <input id="dCog" value="0" size="6"></label>
+  </div>
+</div>
+
+<div class="card" id="prevcard" hidden>
+  <h3>3. Preview &amp; checks</h3>
+  <div id="checks"></div>
+  <p></p>
+  <div class="scroll"><table id="prev"></table></div>
+  <p></p>
+  <div class="row">
+    <button class="primary" id="export">Download stowage-ready .xlsx</button>
+    <button id="csvexport">Download .csv</button>
+    <span id="rowcount"></span>
+  </div>
+  <p><small>Paste the downloaded table into your “Compilation of AutoCAD-Script-Files” sheet (below the dark header row), hit Create Script-File. Rules enforced on export: no empty lines, commas in Length/Width replaced by dots, all number cells filled.</small></p>
+</div>
+
+<script>
+// ---------- target schema ----------
+const TARGETS = [
+  {key:'qty',    label:'Quantity',              synonyms:['qty','quantity','pieces','pcs','stk','stück','stueck','anzahl','colli','packages','no of pieces','menge']},
+  {key:'no',     label:'No.',                   synonyms:['no','nr','number','pos','item','mark','lfd','position','item no','colli no']},
+  {key:'pol',    label:'Port of Loading',       synonyms:['pol','port of loading','loading port','load port','ladehaven','ladehafen','from','verschiffung']},
+  {key:'pod',    label:'Port of Disch.',        synonyms:['pod','port of discharge','port of disch','discharge port','disch port','destination','to','löschhafen','entladehafen','pod ']},
+  {key:'desc',   label:'Description',           synonyms:['description','desc','cargo','goods','bezeichnung','ware','güter','package type','type','remarks cargo','article','artikel','product']},
+  {key:'len',    label:'Length m',              synonyms:['length','len','l','länge','laenge','lang']},
+  {key:'wid',    label:'Width m',               synonyms:['width','wid','w','breite','b','wide']},
+  {key:'hei',    label:'Height m',              synonyms:['height','hei','h','höhe','hoehe','hoch','high']},
+  {key:'wgt',    label:'Weight mt',             synonyms:['weight','wgt','wt','mass','gewicht','ton','tons','tonne','tonnes','mt','kg','kgs','t ','gw','gross weight']},
+  {key:'cogL',   label:'COG long.',             synonyms:['cog long','cog l','cog longitudinal','long cog','cog x','vcg long','lcg','cog lenght',' Schwerpunkt längs'.toLowerCase()]},
+  {key:'cogT',   label:'COG transv.',           synonyms:['cog transv','cog transverse','cog t','transv cog','cog y','tcg',' Schwerpunkt quer'.toLowerCase()]},
+  {key:'remark', label:'Remark',                synonyms:['remark','remarks','note','notes','comment','bemerkung','anmerkung']},
+  {key:'topc',   label:'Top color',             synonyms:['top color','top colour','topcolor','color top','colour top']},
+  {key:'rectc',  label:'Rectangle/ hatch color',synonyms:['rectangle','hatch color','hatch colour','rect color','rect colour','rectangle color','rectangle colour','color','colour','farbe']},
+  {key:'layer',  label:'Layer',                 synonyms:['layer','ebene','cad layer']},
+  {key:'hatch',  label:'plot with hatch (y/n)',synonyms:['hatch','plot with hatch','plot','with hatch','y/n','hatched','schraffur']},
+];
+const CALC = ['vol1','volT']; // appended: Volume single, Volume total
+
+function norm(s){
+  return String(s ?? '').toLowerCase()
+    .replace(/\[.*?\]|\(.*?\)/g,' ')      // drop [mm], (m), units in brackets
+    .replace(/[,.;:_\-]+/g,' ')
+    .replace(/m³|m3|cbm|mm|cm|meter|metre|tonnes|tonne|tons|kgs?| to\b/g,' ')
+    .replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/ß/g,'ss')
+    .replace(/\s+/g,' ').trim();
+}
+function scoreHeader(h, t){
+  const n = norm(h);
+  if(!n) return 0;
+  for(const s of t.synonyms){ if(n === norm(s)) return 100; }
+  for(const s of t.synonyms){ const ns = norm(s); if(ns && (n.includes(ns) || ns.includes(n))) return 60 + ns.length; }
+  // token overlap
+  const nt = new Set(n.split(' '));
+  let best = 0;
+  for(const s of t.synonyms){
+    const st = new Set(norm(s).split(' '));
+    let hit = 0; st.forEach(w=>{ if(nt.has(w)) hit++; });
+    if(hit) best = Math.max(best, 30 + hit*10);
+  }
+  return best;
+}
+function autoMap(headers){
+  // returns {targetKey: sourceIndex or -1}, greedy best-score
+  const used = new Set(); const map = {};
+  const cands = [];
+  for(const t of TARGETS){
+    headers.forEach((h,i)=>{ const s = scoreHeader(h,t); if(s>0) cands.push({t:t.key,i,s}); });
+  }
+  cands.sort((a,b)=>b.s-a.s);
+  for(const t of TARGETS) map[t.key] = -1;
+  for(const c of cands){
+    if(map[c.t]===-1 && !used.has(c.i) && c.s>=30){ map[c.t]=c.i; used.add(c.i); }
+  }
+  return map;
+}
+
+// ---------- state ----------
+let WB=null, FNAME='';
+const $ = id=>document.getElementById(id);
+
+$('drop').onclick = ()=>$('file').click();
+$('drop').ondragover = e=>{e.preventDefault();$('drop').classList.add('over');};
+$('drop').ondragleave = ()=>$('drop').classList.remove('over');
+$('drop').ondrop = e=>{e.preventDefault();$('drop').classList.remove('over'); loadFile(e.dataTransfer.files[0]);};
+$('file').onchange = e=>loadFile(e.target.files[0]);
+
+function loadFile(f){
+  if(!f) return;
+  FNAME = f.name;
+  const r = new FileReader();
+  r.onload = e=>{
+    try{
+      WB = XLSX.read(e.target.result,{type:'array'});
+      const sh = $('sheet'); sh.innerHTML='';
+      WB.SheetNames.forEach(n=>{const o=document.createElement('option');o.textContent=n;sh.appendChild(o);});
+      sh.onchange = buildMapping;
+      $('headerrow').onchange = buildMapping;
+      $('remap').onclick = buildMapping;
+      $('fileinfo').innerHTML = '<span class="ok">Loaded:</span> '+esc(FNAME)+' — sheets: '+WB.SheetNames.length;
+      buildMapping();
+    }catch(err){ $('fileinfo').innerHTML = '<span class="bad">Could not read file:</span> '+esc(err.message); }
+  };
+  r.readAsArrayBuffer(f);
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function sheetRows(){
+  const ws = WB.Sheets[$('sheet').value || WB.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+}
+function buildMapping(){
+  const rows = sheetRows();
+  const hr = Math.max(1,parseInt($('headerrow').value||'1'))-1;
+  const headers = rows[hr] || [];
+  const map = autoMap(headers);
+  let matched = TARGETS.filter(t=>map[t.key]!==-1).length;
+  $('matchscore').innerHTML = '<small>auto-matched <b>'+matched+'</b>/'+TARGETS.length+' targets from '+headers.length+' source columns</small>';
+  const tbl = $('map'); tbl.innerHTML='';
+  let tr = document.createElement('tr');
+  tr.innerHTML = '<th>Your stowage column</th><th>← customer column</th><th>sample value</th>';
+  tbl.appendChild(tr);
+  window._map = map; window._headers = headers; window._hr = hr;
+  for(const t of TARGETS){
+    tr = document.createElement('tr');
+    const sel = document.createElement('select');
+    sel.dataset.target = t.key;
+    sel.innerHTML = '<option value="-1">— ignore —</option>' + headers.map((h,i)=>'<option value="'+i+'">'+esc('['+(i+1)+'] '+h)+'</option>').join('');
+    sel.value = String(map[t.key]);
+    sel.onchange = buildPreview;
+    const td0=document.createElement('td'); td0.innerHTML='<b>'+esc(t.label)+'</b>';
+    const td1=document.createElement('td'); td1.appendChild(sel);
+    const td2=document.createElement('td'); td2.className='samp'; td2.dataset.target=t.key;
+    tr.append(td0,td1,td2);
+    tbl.appendChild(tr);
+  }
+  ['dTop','dRect','dLayer','dHatch','dCog'].forEach(id=>$(id).onchange=buildPreview);
+  $('mapcard').hidden = false;
+  buildPreview();
+}
+function curMap(){
+  const m = {};
+  document.querySelectorAll('#map select').forEach(s=>m[s.dataset.target]=parseInt(s.value));
+  return m;
+}
+function toNum(v, isWeight){
+  // handles "12,5", "12.5", "1 200 kg", "12,5 mt", "1.200,5" (de) vs "1,200.5" (en)
+  if(v===''||v==null) return NaN;
+  if(typeof v==='number') return v;
+  let s = String(v).trim().toLowerCase().replace(/\s+/g,'').replace(/(mt|tons?|tonnes?|kgs?|m)$/,'');
+  const hasC = s.includes(','), hasD = s.includes('.');
+  if(hasC && hasD){ // last separator = decimal
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  } else if(hasC){ s=s.replace(',','.'); }
+  let n = parseFloat(s);
+  if(isNaN(n)) return NaN;
+  if(isWeight && /kg/.test(String(v).toLowerCase())) n = n/1000; // kg → mt
+  return n;
+}
+function buildPreview(){
+  const rows = sheetRows(), hr = window._hr, map = curMap();
+  const data = rows.slice(hr+1).filter(r=>r.some(c=>String(c).trim()!==''));
+  const out = [];
+  const errs = {empty:0, comma:0, nan:0};
+  data.forEach((r,ri)=>{
+    const g = k=> map[k]>=0 ? r[map[k]] : '';
+    const qty = map.qty>=0 ? toNum(g('qty')) : 1;
+    const L = toNum(g('len')), W = toNum(g('wid')), H = toNum(g('hei')), Wt = toNum(g('wgt'), true);
+    const o = {
+      Quantity: isNaN(qty)?'':qty, 'No.': g('no')||ri+1,
+      'Port of Loading': g('pol'), 'Port of Disch.': g('pod'), 'Description': g('desc'),
+      'Length m': isNaN(L)?'':L, 'Width m': isNaN(W)?'':W, 'Height m': isNaN(H)?'':H, 'Weight mt': isNaN(Wt)?'':Wt,
+      'COG long.': map.cogL>=0?(g('cogL')||0):$('dCog').value||0,
+      'COG transv.': map.cogT>=0?(g('cogT')||0):$('dCog').value||0,
+      'Remark': g('remark'),
+      'Top color': map.topc>=0?(g('topc')||$('dTop').value):$('dTop').value,
+      'Rectangle/ hatch color': map.rectc>=0?(g('rectc')||$('dRect').value):$('dRect').value,
+      'Layer': map.layer>=0?(g('layer')||$('dLayer').value):$('dLayer').value,
+      'Volume singel m3': (!isNaN(L)&&!isNaN(W)&&!isNaN(H))?+(L*W*H).toFixed(3):'',
+      'Volume total m3': (!isNaN(L)&&!isNaN(W)&&!isNaN(H))?+((isNaN(qty)?1:qty)*L*W*H).toFixed(3):'',
+      'plot with hatch (y/n)': map.hatch>=0?((String(g('hatch')).toLowerCase().startsWith('y')||g('hatch')==='1')?'y':'n'):$('dHatch').value,
+    };
+    if([o['Length m'],o['Width m'],o['Height m'],o['Weight mt'],o.Quantity].some(v=>v==='')) errs.nan++;
+    out.push(o);
+  });
+  window._out = out;
+  // sample values in mapping table
+  document.querySelectorAll('#map td.samp').forEach(td=>{
+    const k = td.dataset.target, si = map[k];
+    td.textContent = si>=0 ? String(data[0]?.[si] ?? '') : '(default)';
+  });
+  // preview (first 50)
+  const cols = Object.keys(out[0]||{});
+  const pv = $('prev'); pv.innerHTML='';
+  if(!out.length){ pv.innerHTML='<tr><td>No data rows found below header row.</td></tr>'; }
+  else{
+    let tr=document.createElement('tr');
+    cols.forEach(c=>{const th=document.createElement('th');th.textContent=c;tr.appendChild(th);});
+    pv.appendChild(tr);
+    out.slice(0,50).forEach(o=>{tr=document.createElement('tr');cols.forEach(c=>{const td=document.createElement('td');td.textContent=o[c];tr.appendChild(td);});pv.appendChild(tr);});
+  }
+  const totW = out.reduce((a,o)=>a+(parseFloat(o['Weight mt'])||0),0);
+  let html = '<b>'+out.length+'</b> rows → total weight <b>'+totW.toFixed(1)+' mt</b>. ';
+  html += errs.nan? '<span class="warn">'+errs.nan+' rows have empty number cells (filled rules: Quantity=1 fallback only in preview — fill before CAD).</span> ' : '<span class="ok">All L/W/H/Weight cells filled.</span> ';
+  const core = ['len','wid','hei','wgt','desc','qty'].filter(k=>map[k]===-1);
+  html += core.length? '<span class="warn">Unmapped core: '+core.join(', ')+' — set manually above.</span>' : '<span class="ok">Core columns mapped.</span>';
+  $('checks').innerHTML = html;
+  $('rowcount').textContent = out.length>50? 'showing 50 of '+out.length : out.length+' rows';
+  $('prevcard').hidden = false;
+}
+function cleanExportRows(){
+  // enforce tool rules: no empty lines, dots not commas, all numbers filled (0 fallback flagged)
+  return window._out.filter(o=>Object.values(o).some(v=>String(v).trim()!=='')).map(o=>{
+    const n = {...o};
+    ['Length m','Width m','Height m','Weight mt','Quantity'].forEach(k=>{
+      if(n[k]===''||n[k]==null) n[k]=0;
+      if(typeof n[k]==='number') n[k]=String(n[k]).replace(',','.');
+    });
+    return n;
+  });
+}
+$('export').onclick = ()=>{
+  const rows = cleanExportRows();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Stowage');
+  XLSX.writeFile(wb, 'stowage-ready_'+(FNAME.replace(/\.[^.]+$/,'')||'list')+'.xlsx');
+};
+$('csvexport').onclick = ()=>{
+  const rows = cleanExportRows();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.writeFile({SheetNames:['S'],Sheets:{S:ws}, SSF:{}}, 'stowage-ready.csv', {bookType:'csv'});
+};
+</script>
+</body>
+</html>
