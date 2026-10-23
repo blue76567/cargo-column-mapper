@@ -76,22 +76,22 @@
 <script>
 // ---------- target schema ----------
 const TARGETS = [
-  {key:'qty',    label:'Quantity',              synonyms:['qty','quantity','pieces','pcs','stk','stück','stueck','anzahl','colli','packages','no of pieces','menge']},
-  {key:'no',     label:'No.',                   synonyms:['no','nr','number','pos','item','mark','lfd','position','item no','colli no']},
-  {key:'pol',    label:'Port of Loading',       synonyms:['pol','port of loading','loading port','load port','ladehaven','ladehafen','from','verschiffung']},
-  {key:'pod',    label:'Port of Disch.',        synonyms:['pod','port of discharge','port of disch','discharge port','disch port','destination','to','löschhafen','entladehafen','pod ']},
-  {key:'desc',   label:'Description',           synonyms:['description','desc','cargo','goods','bezeichnung','ware','güter','package type','type','remarks cargo','article','artikel','product']},
-  {key:'len',    label:'Length m',              synonyms:['length','len','l','länge','laenge','lang']},
-  {key:'wid',    label:'Width m',               synonyms:['width','wid','w','breite','b','wide']},
-  {key:'hei',    label:'Height m',              synonyms:['height','hei','h','höhe','hoehe','hoch','high']},
-  {key:'wgt',    label:'Weight mt',             synonyms:['weight','wgt','wt','mass','gewicht','ton','tons','tonne','tonnes','mt','kg','kgs','t ','gw','gross weight']},
-  {key:'cogL',   label:'COG long.',             synonyms:['cog long','cog l','cog longitudinal','long cog','cog x','vcg long','lcg','cog lenght',' Schwerpunkt längs'.toLowerCase()]},
-  {key:'cogT',   label:'COG transv.',           synonyms:['cog transv','cog transverse','cog t','transv cog','cog y','tcg',' Schwerpunkt quer'.toLowerCase()]},
-  {key:'remark', label:'Remark',                synonyms:['remark','remarks','note','notes','comment','bemerkung','anmerkung']},
-  {key:'topc',   label:'Top color',             synonyms:['top color','top colour','topcolor','color top','colour top']},
-  {key:'rectc',  label:'Rectangle/ hatch color',synonyms:['rectangle','hatch color','hatch colour','rect color','rect colour','rectangle color','rectangle colour','color','colour','farbe']},
-  {key:'layer',  label:'Layer',                 synonyms:['layer','ebene','cad layer']},
-  {key:'hatch',  label:'plot with hatch (y/n)',synonyms:['hatch','plot with hatch','plot','with hatch','y/n','hatched','schraffur']},
+  {key:'qty',    label:'Quantity',              synonyms:['qty','quantity','pieces','pcs','stk','stück','stueck','anzahl','colli','packages','no of pieces','menge','cant','cantidad','piezas','pz','pza','bultos','bulto','paquetes']},
+  {key:'no',     label:'No.',                   synonyms:['no','nr','number','pos','item','mark','lfd','position','item no','colli no','nº','nro','num','numero','partida','folio']},
+  {key:'pol',    label:'Port of Loading',       synonyms:['pol','port of loading','loading port','load port','ladehaven','ladehafen','from','verschiffung','puerto de carga','puerto de embarque','origen','procedencia','puerto carga']},
+  {key:'pod',    label:'Port of Disch.',        synonyms:['pod','port of discharge','port of disch','discharge port','disch port','destination','to','löschhafen','entladehafen','puerto de descarga','destino','puerto descarga']},
+  {key:'desc',   label:'Description',           synonyms:['description','desc','cargo','goods','bezeichnung','ware','güter','package type','type','remarks cargo','article','artikel','product','descripcion','mercancia','mercaderia','carga','producto','articulo','embalaje','tipo de bulto']},
+  {key:'len',    label:'Length m',              synonyms:['length','len','l','länge','laenge','lang','largo','longitud','eslora']},
+  {key:'wid',    label:'Width m',               synonyms:['width','wid','w','breite','b','wide','ancho','manga']},
+  {key:'hei',    label:'Height m',              synonyms:['height','hei','h','höhe','hoehe','hoch','high','alto','altura','puntal']},
+  {key:'wgt',    label:'Weight mt',             synonyms:['weight','wgt','wt','mass','gewicht','ton','tons','tonne','tonnes','mt','kg','kgs','t ','gw','gross weight','peso','peso bruto','peso neto','toneladas','tm']},
+  {key:'cogL',   label:'COG long.',             synonyms:['cog long','cog l','cog longitudinal','long cog','cog x','vcg long','lcg','cdg long','cdg longitudinal','centro de gravedad longitudinal']},
+  {key:'cogT',   label:'COG transv.',           synonyms:['cog transv','cog transverse','cog t','transv cog','cog y','tcg','cdg transv','cdg transversal','centro de gravedad transversal']},
+  {key:'remark', label:'Remark',                synonyms:['remark','remarks','note','notes','comment','bemerkung','anmerkung','observaciones','comentarios','notas']},
+  {key:'topc',   label:'Top color',             synonyms:['top color','top colour','topcolor','color top','colour top','color superior']},
+  {key:'rectc',  label:'Rectangle/ hatch color',synonyms:['rectangle','hatch color','hatch colour','rect color','rect colour','rectangle color','rectangle colour','color','colour','farbe','relleno','color de relleno']},
+  {key:'layer',  label:'Layer',                 synonyms:['layer','ebene','cad layer','capa']},
+  {key:'hatch',  label:'plot with hatch (y/n)',synonyms:['hatch','plot with hatch','plot','with hatch','y/n','hatched','schraffur','sombreado','achurado','trama']},
 ];
 const CALC = ['vol1','volT']; // appended: Volume single, Volume total
 
@@ -101,6 +101,8 @@ function norm(s){
     .replace(/[,.;:_\-]+/g,' ')
     .replace(/m³|m3|cbm|mm|cm|meter|metre|tonnes|tonne|tons|kgs?| to\b/g,' ')
     .replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/ß/g,'ss')
+    .replace(/[áàâ]/g,'a').replace(/[éèê]/g,'e').replace(/[íìî]/g,'i')
+    .replace(/[óòô]/g,'o').replace(/[úùû]/g,'u').replace(/ñ/g,'n').replace(/ç/g,'c')
     .replace(/\s+/g,' ').trim();
 }
 function scoreHeader(h, t){
