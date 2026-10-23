@@ -65,7 +65,8 @@
   <div class="scroll"><table id="prev"></table></div>
   <p></p>
   <div class="row">
-    <button class="primary" id="export">Download stowage-ready .xlsx</button>
+    <button class="primary" id="copybtn">Copy for Excel (paste straight into stowage sheet)</button>
+    <button id="export">Download .xlsx (backup)</button>
     <button id="csvexport">Download .csv</button>
     <span id="rowcount"></span>
   </div>
@@ -277,6 +278,19 @@ function cleanExportRows(){
     return n;
   });
 }
+$('copybtn').onclick = async ()=>{
+  const rows = cleanExportRows();
+  if(!rows.length) return;
+  const cols = Object.keys(rows[0]);
+  const tsv = rows.map(o=>cols.map(c=>String(o[c]).replace(/\t/g,' ')).join('\t')).join('\n');
+  try{ await navigator.clipboard.writeText(tsv); $('copybtn').textContent = 'Copied — paste into Excel (Ctrl+V)'; }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = tsv; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    $('copybtn').textContent = 'Copied — paste into Excel (Ctrl+V)';
+  }
+  setTimeout(()=>$('copybtn').textContent='Copy for Excel (paste straight into stowage sheet)', 3000);
+};
 $('export').onclick = ()=>{
   const rows = cleanExportRows();
   const ws = XLSX.utils.json_to_sheet(rows);
