@@ -223,10 +223,14 @@ function buildPreview(){
   const data = rows.slice(hr+1).filter(r=>r.some(c=>String(c).trim()!==''));
   const out = [];
   const errs = {empty:0, comma:0, nan:0};
+  const wHeadKg = map.wgt>=0 && /kg|kilo/i.test(String(window._headers[map.wgt]||''));
   data.forEach((r,ri)=>{
     const g = k=> map[k]>=0 ? r[map[k]] : '';
     const qty = map.qty>=0 ? toNum(g('qty')) : 1;
-    const L = toNum(g('len')), W = toNum(g('wid')), H = toNum(g('hei')), Wt = toNum(g('wgt'), true);
+    const L = toNum(g('len')), W = toNum(g('wid')), H = toNum(g('hei'));
+    const Wt0 = toNum(g('wgt'), true);
+    // header says kg (e.g. "Peso bruto (kg)") but cell is a plain number -> convert
+    const Wt = (wHeadKg && !isNaN(Wt0) && !/kg|mt|ton/i.test(String(g('wgt')))) ? Wt0/1000 : Wt0;
     const o = {
       Quantity: isNaN(qty)?'':qty, 'No.': g('no')||ri+1,
       'Port of Loading': g('pol'), 'Port of Disch.': g('pod'), 'Description': g('desc'),
