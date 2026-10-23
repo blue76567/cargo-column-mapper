@@ -48,7 +48,7 @@
   </div>
   <p></p>
   <table id="map"></table>
-  <p><small>“— ignore —” for columns you don’t need. Volumes are calculated automatically (L×W×H, ×Qty). Colors / Layer / hatch default sensibly and can be edited after export.</small></p>
+  <p><small>n/a = not in the customer file — the fallback value below is used instead. Volumes are calculated automatically (L×W×H, ×Qty).</small></p>
   <div class="row">
     <label>Top color: <input id="dTop" value="bylayer" size="10"></label>
     <label>Rectangle/ hatch color: <input id="dRect" value="bylayer" size="10"></label>
@@ -186,7 +186,7 @@ function buildMapping(){
     tr = document.createElement('tr');
     const sel = document.createElement('select');
     sel.dataset.target = t.key;
-    sel.innerHTML = '<option value="-1">— ignore —</option>' + headers.map((h,i)=>'<option value="'+i+'">'+esc('['+(i+1)+'] '+h)+'</option>').join('');
+    sel.innerHTML = '<option value="-1">n/a</option>' + headers.map((h,i)=>'<option value="'+i+'">'+esc('['+(i+1)+'] '+h)+'</option>').join('');
     sel.value = String(map[t.key]);
     sel.onchange = buildPreview;
     const td0=document.createElement('td'); td0.innerHTML='<b>'+esc(t.label)+'</b>';
@@ -253,7 +253,7 @@ function buildPreview(){
   // sample values in mapping table
   document.querySelectorAll('#map td.samp').forEach(td=>{
     const k = td.dataset.target, si = map[k];
-    td.textContent = si>=0 ? String(data[0]?.[si] ?? '') : '(default)';
+    td.textContent = si>=0 ? String(data[0]?.[si] ?? '') : 'n/a';
   });
   // preview (first 50)
   const cols = Object.keys(out[0]||{});
